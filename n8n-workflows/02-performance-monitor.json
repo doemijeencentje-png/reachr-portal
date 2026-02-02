@@ -1,0 +1,773 @@
+{
+  "name": "Reachr - Performance Monitor (72h Check)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "trigger-hourly",
+      "name": "Hourly Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 300],
+      "notes": "Checkt elk uur of er posts zijn die geëvalueerd moeten worden"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/evaluate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-items-to-evaluate",
+      "name": "Haal Posts voor Evaluatie",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [220, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Haalt alle posts op die 72 uur oud zijn en geëvalueerd moeten worden"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-items",
+              "leftValue": "={{ $json.count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-items",
+      "name": "Heeft Posts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [440, 300],
+      "notes": "Checkt of er posts zijn om te evalueren"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "itemsToEvaluate",
+        "options": {}
+      },
+      "id": "split-items",
+      "name": "Split Posts",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [660, 200],
+      "notes": "Maakt een item per post"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/{{ $json.tenant_id }}/config",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-tenant-config",
+      "name": "1. Haal Klant Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [880, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Haalt de configuratie op van de klant (incl. stats provider)"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.integration.stats_provider }}",
+                    "rightValue": "jetpack",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Jetpack"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.integration.stats_provider }}",
+                    "rightValue": "ga4",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "GA4"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "switch-stats-provider",
+      "name": "2. Kies Stats Provider",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [1100, 200],
+      "notes": "Routeert naar de juiste stats provider"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://stats.wp.com/csv.php?api_key={{ $json.integration.jetpack_api_key }}&blog_id={{ $json.integration.jetpack_site_id }}&table=postviews&post_id={{ $('Split Posts').item.json.wp_post_id }}&days=7",
+        "options": {}
+      },
+      "id": "fetch-jetpack-stats",
+      "name": "Fetch Jetpack Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1320, 100],
+      "notes": "Haalt views op via Jetpack Stats API"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://analyticsdata.googleapis.com/v1beta/properties/{{ $json.integration.ga4_property_id }}:runReport",
+        "authentication": "oAuth2",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"dateRanges\": [{\"startDate\": \"7daysAgo\", \"endDate\": \"today\"}],\n  \"dimensions\": [{\"name\": \"pagePath\"}],\n  \"metrics\": [{\"name\": \"screenPageViews\"}],\n  \"dimensionFilter\": {\n    \"filter\": {\n      \"fieldName\": \"pagePath\",\n      \"stringFilter\": {\n        \"matchType\": \"CONTAINS\",\n        \"value\": \"{{ $('Split Posts').item.json.slug }}\"\n      }\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "fetch-ga4-stats",
+      "name": "Fetch GA4 Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1320, 300],
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "google-oauth",
+          "name": "Google OAuth"
+        }
+      },
+      "notes": "Haalt views op via Google Analytics 4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse stats based on provider\nconst item = $input.item;\nlet views = 0;\nlet referrers = [];\n\n// Try to extract views from the response\nif (item.json.rows && item.json.rows.length > 0) {\n  // GA4 format\n  views = parseInt(item.json.rows[0].metricValues[0].value) || 0;\n} else if (typeof item.json === 'string') {\n  // Jetpack CSV format - parse it\n  const lines = item.json.split('\\n');\n  if (lines.length > 1) {\n    views = parseInt(lines[1].split(',')[1]) || 0;\n  }\n} else if (item.json.views) {\n  // Direct views property\n  views = item.json.views;\n}\n\nreturn {\n  json: {\n    contentItemId: $('Split Posts').item.json.id,\n    tenantId: $('Split Posts').item.json.tenant_id,\n    title: $('Split Posts').item.json.title,\n    wpPostId: $('Split Posts').item.json.wp_post_id,\n    views: views,\n    referrers: referrers,\n    threshold: $('1. Haal Klant Config').item.json.tenant?.performance_threshold || 6\n  }\n};"
+      },
+      "id": "parse-stats",
+      "name": "3. Parse Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 200],
+      "notes": "Zet de stats om naar een uniform format"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/evaluate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contentItemId\": \"{{ $json.contentItemId }}\",\n  \"views\": {{ $json.views }},\n  \"referrers\": {{ JSON.stringify($json.referrers || []) }}\n}",
+        "options": {}
+      },
+      "id": "call-evaluate",
+      "name": "4. Evalueer Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1760, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Vraagt het portal om een beslissing: optimize of takedown"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.evaluation.decision }}",
+                    "rightValue": "optimize",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Optimize"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.evaluation.decision }}",
+                    "rightValue": "takedown",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Takedown"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-decision",
+      "name": "5. Beslissing",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [1980, 200],
+      "notes": "Routeert naar optimize of takedown path"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/optimize",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contentItemId\": \"{{ $json.evaluation.contentItemId }}\",\n  \"performanceData\": {\n    \"views\": {{ $json.evaluation.views }},\n    \"referrers\": {{ JSON.stringify($json.evaluation.referrers) }}\n  }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "call-optimize",
+      "name": "6A. Optimize Article",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2200, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Vraagt Claude om het artikel te verbeteren"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/{{ $json.tenantId }}/config",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-wp-for-optimize",
+      "name": "Haal WP voor Update",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2420, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Haalt WordPress credentials voor de update"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.integration.wordpress_base_url }}/wp-json/wp/v2/posts/{{ $('3. Parse Stats').item.json.wpPostId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{ $('6A. Optimize Article').item.json.contentItem.title }}\",\n  \"content\": {{ JSON.stringify($('6A. Optimize Article').item.json.contentItem.content) }},\n  \"excerpt\": \"{{ $('6A. Optimize Article').item.json.contentItem.metaDescription }}\"\n}",
+        "options": {}
+      },
+      "id": "update-wordpress-optimized",
+      "name": "Update WP Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2640, 100],
+      "notes": "Update de WordPress post met de verbeterde content"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_CHANNEL_ID }}",
+          "mode": "id"
+        },
+        "text": "=✨ *Post geoptimaliseerd!*\n\n📝 *Titel:* {{ $('6A. Optimize Article').item.json.contentItem.title }}\n📊 *Views:* {{ $('4. Evalueer Post').item.json.evaluation.views }} (drempel: {{ $('4. Evalueer Post').item.json.evaluation.threshold }})\n🔄 *Versie:* {{ $('6A. Optimize Article').item.json.contentItem.version }}\n\n*Verbeteringen:*\n{{ $('6A. Optimize Article').item.json.changes.explanation }}",
+        "otherOptions": {}
+      },
+      "id": "slack-optimized",
+      "name": "Slack: Geoptimaliseerd",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [2860, 100],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-oauth",
+          "name": "Slack Account"
+        }
+      },
+      "notes": "Meldt dat een post is geoptimaliseerd"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/{{ $json.evaluation.tenantId || $('3. Parse Stats').item.json.tenantId }}/config",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-wp-for-takedown",
+      "name": "6B. Haal WP voor Takedown",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2200, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Haalt WordPress credentials voor takedown"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.integration.wordpress_base_url }}/wp-json/wp/v2/posts/{{ $('3. Parse Stats').item.json.wpPostId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"draft\"\n}",
+        "options": {}
+      },
+      "id": "set-wp-draft",
+      "name": "Zet WP naar Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2420, 300],
+      "notes": "Zet de WordPress post op draft (offline)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/content/offline",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contentItemId\": \"{{ $('4. Evalueer Post').item.json.evaluation.contentItemId }}\",\n  \"reason\": \"Performance below threshold\",\n  \"views\": {{ $('4. Evalueer Post').item.json.evaluation.views }},\n  \"threshold\": {{ $('4. Evalueer Post').item.json.evaluation.threshold }}\n}",
+        "options": {}
+      },
+      "id": "update-portal-offline",
+      "name": "Update Portal: Offline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2640, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Meldt aan portal dat post offline is"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_CHANNEL_ID }}",
+          "mode": "id"
+        },
+        "text": "=🔴 *Post offline gehaald*\n\n📝 *Titel:* {{ $('3. Parse Stats').item.json.title }}\n📊 *Views:* {{ $('4. Evalueer Post').item.json.evaluation.views }} (drempel: {{ $('4. Evalueer Post').item.json.evaluation.threshold }})\n\n_Een nieuwe poging wordt gestart..._",
+        "otherOptions": {}
+      },
+      "id": "slack-takedown",
+      "name": "Slack: Offline",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [2860, 300],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-oauth",
+          "name": "Slack Account"
+        }
+      },
+      "notes": "Meldt dat een post offline is gehaald"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "no_items"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "no-items",
+      "name": "Geen Posts",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 400],
+      "notes": "Geen posts om te evalueren"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "using_default_stats"
+            },
+            {
+              "name": "views",
+              "value": "0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "default-stats",
+      "name": "Default Stats (0 views)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1320, 500],
+      "notes": "Geen stats provider geconfigureerd - gebruik 0 views"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Hourly Trigger": {
+      "main": [
+        [
+          {
+            "node": "Haal Posts voor Evaluatie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haal Posts voor Evaluatie": {
+      "main": [
+        [
+          {
+            "node": "Heeft Posts?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Heeft Posts?": {
+      "main": [
+        [
+          {
+            "node": "Split Posts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Geen Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Posts": {
+      "main": [
+        [
+          {
+            "node": "1. Haal Klant Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Haal Klant Config": {
+      "main": [
+        [
+          {
+            "node": "2. Kies Stats Provider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Kies Stats Provider": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jetpack Stats",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch GA4 Stats",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Default Stats (0 views)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Jetpack Stats": {
+      "main": [
+        [
+          {
+            "node": "3. Parse Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch GA4 Stats": {
+      "main": [
+        [
+          {
+            "node": "3. Parse Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Stats (0 views)": {
+      "main": [
+        [
+          {
+            "node": "3. Parse Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Parse Stats": {
+      "main": [
+        [
+          {
+            "node": "4. Evalueer Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Evalueer Post": {
+      "main": [
+        [
+          {
+            "node": "5. Beslissing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Beslissing": {
+      "main": [
+        [
+          {
+            "node": "6A. Optimize Article",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6B. Haal WP voor Takedown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6A. Optimize Article": {
+      "main": [
+        [
+          {
+            "node": "Haal WP voor Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haal WP voor Update": {
+      "main": [
+        [
+          {
+            "node": "Update WP Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update WP Post": {
+      "main": [
+        [
+          {
+            "node": "Slack: Geoptimaliseerd",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6B. Haal WP voor Takedown": {
+      "main": [
+        [
+          {
+            "node": "Zet WP naar Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zet WP naar Draft": {
+      "main": [
+        [
+          {
+            "node": "Update Portal: Offline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Portal: Offline": {
+      "main": [
+        [
+          {
+            "node": "Slack: Offline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "reachr-v1-performance-monitor",
+  "meta": {
+    "instanceId": "reachr-portal"
+  },
+  "id": "reachr-performance-monitor",
+  "tags": [
+    {
+      "id": "reachr",
+      "name": "Reachr"
+    }
+  ]
+}

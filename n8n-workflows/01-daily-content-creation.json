@@ -1,0 +1,543 @@
+{
+  "name": "Reachr - Daily Content Creation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24,
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "trigger-daily",
+      "name": "Daily Trigger (9:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 300],
+      "notes": "Triggert elke dag om 9:00 uur"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/active",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-tenants",
+      "name": "Haal Actieve Klanten Op",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [220, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Haalt alle klanten op die klaar zijn voor content creatie"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-tenants",
+              "leftValue": "={{ $json.tenants.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-tenants",
+      "name": "Heeft Klanten?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [440, 300],
+      "notes": "Checkt of er actieve klanten zijn"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "tenants",
+        "options": {}
+      },
+      "id": "split-tenants",
+      "name": "Split Klanten",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [660, 200],
+      "notes": "Maakt een item per klant"
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.floor(Math.random() * 30) + 1 }}",
+        "unit": "seconds"
+      },
+      "id": "random-delay",
+      "name": "Random Delay (1-30s)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [880, 200],
+      "notes": "Voorkomt dat alle requests tegelijk komen"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/research",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenantId\": \"{{ $json.id }}\"\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "call-research",
+      "name": "1. Research Topic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1100, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Vraagt Claude om een topic te kiezen voor deze klant"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-research-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-research-success",
+      "name": "Research OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1320, 200],
+      "notes": "Checkt of topic research gelukt is"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenantId\": \"{{ $json.tenantId }}\",\n  \"topic\": \"{{ $json.research.topic }}\",\n  \"angle\": \"{{ $json.research.angle }}\",\n  \"keywords\": {{ JSON.stringify($json.research.keywords) }},\n  \"sources\": {{ JSON.stringify($json.research.sources) }}\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "call-generate",
+      "name": "2. Generate Article",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1540, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Vraagt Claude om het artikel te schrijven"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-generate-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-generate-success",
+      "name": "Generate OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1760, 100],
+      "notes": "Checkt of artikel generatie gelukt is"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/{{ $json.tenantId }}/config",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-wp-credentials",
+      "name": "3. Haal WP Credentials",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1980, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Haalt WordPress credentials op voor deze klant"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.integration.wordpress_base_url }}/wp-json/wp/v2/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{ $('2. Generate Article').item.json.contentItem.title }}\",\n  \"content\": {{ JSON.stringify($('2. Generate Article').item.json.contentItem.content) }},\n  \"status\": \"publish\",\n  \"slug\": \"{{ $('2. Generate Article').item.json.contentItem.slug }}\",\n  \"excerpt\": \"{{ $('2. Generate Article').item.json.contentItem.metaDescription }}\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "publish-to-wordpress",
+      "name": "4. Publiceer naar WordPress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2200, 0],
+      "notes": "Publiceert het artikel naar de WordPress site van de klant"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REACHR_PORTAL_URL }}/api/content/published",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contentItemId\": \"{{ $('2. Generate Article').item.json.contentItem.id }}\",\n  \"wpPostId\": {{ $json.id }},\n  \"wpPostUrl\": \"{{ $json.link }}\"\n}",
+        "options": {}
+      },
+      "id": "update-portal-published",
+      "name": "5. Update Portal Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2420, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "reachr-portal-auth",
+          "name": "Reachr Portal Auth"
+        }
+      },
+      "notes": "Meldt aan het portal dat de post is gepubliceerd"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_CHANNEL_ID }}",
+          "mode": "id"
+        },
+        "text": "=✅ *Nieuwe post gepubliceerd!*\n\n📝 *Titel:* {{ $('2. Generate Article').item.json.contentItem.title }}\n🔗 *URL:* {{ $('4. Publiceer naar WordPress').item.json.link }}\n🏢 *Klant:* {{ $('3. Haal WP Credentials').item.json.profile.company_name }}\n📊 *Topic:* {{ $('1. Research Topic').item.json.research.topic }}",
+        "otherOptions": {}
+      },
+      "id": "slack-success",
+      "name": "Slack: Post Gepubliceerd",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [2640, 0],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-oauth",
+          "name": "Slack Account"
+        }
+      },
+      "notes": "Stuurt een Slack notificatie bij succes"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_CHANNEL_ID }}",
+          "mode": "id"
+        },
+        "text": "=⚠️ *Content creatie mislukt*\n\n🏢 *Klant ID:* {{ $json.tenantId || 'Onbekend' }}\n❌ *Fout:* {{ $json.error || 'Onbekende fout' }}\n📍 *Stap:* Research",
+        "otherOptions": {}
+      },
+      "id": "slack-research-error",
+      "name": "Slack: Research Error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [1540, 300],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-oauth",
+          "name": "Slack Account"
+        }
+      },
+      "notes": "Meldt als research mislukt"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_CHANNEL_ID }}",
+          "mode": "id"
+        },
+        "text": "=⚠️ *Artikel generatie mislukt*\n\n🏢 *Klant ID:* {{ $json.tenantId || 'Onbekend' }}\n📝 *Topic:* {{ $('1. Research Topic').item.json.research.topic }}\n❌ *Fout:* {{ $json.error || 'Onbekende fout' }}",
+        "otherOptions": {}
+      },
+      "id": "slack-generate-error",
+      "name": "Slack: Generate Error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [1980, 200],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-oauth",
+          "name": "Slack Account"
+        }
+      },
+      "notes": "Meldt als artikel generatie mislukt"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "no_tenants"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "no-tenants",
+      "name": "Geen Klanten",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 400],
+      "notes": "Geen actieve klanten gevonden - workflow stopt"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily Trigger (9:00)": {
+      "main": [
+        [
+          {
+            "node": "Haal Actieve Klanten Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haal Actieve Klanten Op": {
+      "main": [
+        [
+          {
+            "node": "Heeft Klanten?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Heeft Klanten?": {
+      "main": [
+        [
+          {
+            "node": "Split Klanten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Geen Klanten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Klanten": {
+      "main": [
+        [
+          {
+            "node": "Random Delay (1-30s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Random Delay (1-30s)": {
+      "main": [
+        [
+          {
+            "node": "1. Research Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Research Topic": {
+      "main": [
+        [
+          {
+            "node": "Research OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research OK?": {
+      "main": [
+        [
+          {
+            "node": "2. Generate Article",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Research Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Generate Article": {
+      "main": [
+        [
+          {
+            "node": "Generate OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate OK?": {
+      "main": [
+        [
+          {
+            "node": "3. Haal WP Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Generate Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Haal WP Credentials": {
+      "main": [
+        [
+          {
+            "node": "4. Publiceer naar WordPress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Publiceer naar WordPress": {
+      "main": [
+        [
+          {
+            "node": "5. Update Portal Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Update Portal Status": {
+      "main": [
+        [
+          {
+            "node": "Slack: Post Gepubliceerd",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "reachr-v1-content-creation",
+  "meta": {
+    "instanceId": "reachr-portal"
+  },
+  "id": "reachr-daily-content",
+  "tags": [
+    {
+      "id": "reachr",
+      "name": "Reachr"
+    }
+  ]
+}
