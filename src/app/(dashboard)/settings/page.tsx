@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Card, Button, Input } from '@/components/ui';
-import { User, Building, Key, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 interface TenantData {
   id: string;
@@ -25,7 +23,6 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // WordPress form state
   const [wpUrl, setWpUrl] = useState('');
   const [wpUsername, setWpUsername] = useState('');
   const [wpPassword, setWpPassword] = useState('');
@@ -142,155 +139,192 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div>
-        <h2 className="text-2xl font-bold text-white">Settings</h2>
-        <p className="text-gray-400">Manage your account and integrations</p>
+    <div className="animate-fade-in max-w-3xl">
+      {/* Page Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
+        <p className="text-gray-500 mt-1">Manage your account and integrations</p>
       </div>
 
       {message && (
-        <div
-          className={`p-4 rounded-lg flex items-center gap-2 ${
-            message.type === 'success'
-              ? 'bg-primary/10 border border-primary/30 text-primary'
-              : 'bg-red-500/10 border border-red-500/30 text-red-500'
-          }`}
-        >
+        <div className={`p-4 rounded-lg flex items-center gap-2 mb-6 ${
+          message.type === 'success'
+            ? 'bg-[rgba(0,200,83,0.1)] border border-[rgba(0,200,83,0.3)] text-[var(--primary-dark)]'
+            : 'bg-red-50 border border-red-200 text-red-600'
+        }`}>
           {message.type === 'success' ? (
-            <CheckCircle className="w-5 h-5" />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/>
+            </svg>
           ) : (
-            <AlertCircle className="w-5 h-5" />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
           )}
           {message.text}
         </div>
       )}
 
       {/* Account Settings */}
-      <Card>
+      <div className="card-hover bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
         <div className="flex items-center gap-3 mb-4">
-          <User className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-semibold text-white">Account</h3>
+          <div className="w-10 h-10 bg-[rgba(0,200,83,0.15)] rounded-lg flex items-center justify-center text-[var(--primary)]">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Account</h3>
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Email</label>
-            <p className="text-white">{user?.email}</p>
+            <label className="block text-sm text-gray-500 mb-1">Email</label>
+            <p className="text-gray-900 font-medium">{user?.email}</p>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Organization Settings */}
-      <Card>
+      <div className="card-hover bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
         <div className="flex items-center gap-3 mb-4">
-          <Building className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-semibold text-white">Organization</h3>
+          <div className="w-10 h-10 bg-[rgba(0,200,83,0.15)] rounded-lg flex items-center justify-center text-[var(--primary)]">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Organization</h3>
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Company Name</label>
-            <p className="text-white">{tenant?.name}</p>
+            <label className="block text-sm text-gray-500 mb-1">Company Name</label>
+            <p className="text-gray-900 font-medium">{tenant?.name}</p>
           </div>
           <div className="flex gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Plan</label>
-              <span className="px-3 py-1 bg-primary/20 text-primary rounded-full text-sm capitalize">
+              <label className="block text-sm text-gray-500 mb-1">Plan</label>
+              <span className="px-3 py-1 status-completed rounded-full text-sm capitalize font-medium">
                 {tenant?.plan}
               </span>
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Status</label>
-              <span className="px-3 py-1 bg-green-500/20 text-green-500 rounded-full text-sm capitalize">
+              <label className="block text-sm text-gray-500 mb-1">Status</label>
+              <span className="px-3 py-1 status-completed rounded-full text-sm capitalize font-medium">
                 {tenant?.status}
               </span>
             </div>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* WordPress Integration */}
-      <Card>
+      <div className="card-hover bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
-          <Key className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-semibold text-white">WordPress Integration</h3>
+          <div className="w-10 h-10 bg-[rgba(0,200,83,0.15)] rounded-lg flex items-center justify-center text-[var(--primary)]">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">WordPress Integration</h3>
         </div>
         <div className="space-y-4">
-          <Input
-            label="WordPress Site URL"
-            type="url"
-            placeholder="https://yourblog.com"
-            value={wpUrl}
-            onChange={(e) => {
-              setWpUrl(e.target.value);
-              setVerified(null);
-            }}
-          />
-          <Input
-            label="Username"
-            type="text"
-            placeholder="admin"
-            value={wpUsername}
-            onChange={(e) => {
-              setWpUsername(e.target.value);
-              setVerified(null);
-            }}
-          />
-          <Input
-            label="Application Password"
-            type="password"
-            placeholder="Enter new password to update"
-            value={wpPassword}
-            onChange={(e) => {
-              setWpPassword(e.target.value);
-              setVerified(null);
-            }}
-            helperText={integration?.wordpress_base_url ? 'Leave blank to keep existing password' : ''}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">WordPress Site URL</label>
+            <input
+              type="url"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 transition-all hover:border-gray-400"
+              placeholder="https://yourblog.com"
+              value={wpUrl}
+              onChange={(e) => {
+                setWpUrl(e.target.value);
+                setVerified(null);
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
+            <input
+              type="text"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 transition-all hover:border-gray-400"
+              placeholder="admin"
+              value={wpUsername}
+              onChange={(e) => {
+                setWpUsername(e.target.value);
+                setVerified(null);
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Application Password</label>
+            <input
+              type="password"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 transition-all hover:border-gray-400"
+              placeholder="Enter new password to update"
+              value={wpPassword}
+              onChange={(e) => {
+                setWpPassword(e.target.value);
+                setVerified(null);
+              }}
+            />
+            {integration?.wordpress_base_url && (
+              <p className="mt-1 text-sm text-gray-500">Leave blank to keep existing password</p>
+            )}
+          </div>
 
           {verified === true && (
-            <div className="flex items-center gap-2 text-primary">
-              <CheckCircle className="w-5 h-5" />
-              <span>Connection verified</span>
+            <div className="flex items-center gap-2 text-[var(--primary)]">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span className="font-medium">Connection verified</span>
             </div>
           )}
 
           {verified === false && (
             <div className="flex items-center gap-2 text-red-500">
-              <AlertCircle className="w-5 h-5" />
-              <span>Connection failed</span>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span className="font-medium">Connection failed</span>
             </div>
           )}
 
           <div className="flex gap-3">
-            <Button
-              variant="outline"
+            <button
               onClick={verifyWordPress}
               disabled={verifying || !wpUrl || !wpUsername || !wpPassword}
+              className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {verifying ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
                   Verifying...
                 </>
               ) : (
                 'Verify Connection'
               )}
-            </Button>
-            <Button
+            </button>
+            <button
               onClick={saveWordPress}
               disabled={isSaving || !wpUrl || !wpUsername}
-              isLoading={isSaving}
+              className="btn-glow px-4 py-2 bg-[var(--primary)] text-white font-medium rounded-lg hover:bg-[var(--primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              Save Credentials
-            </Button>
+              {isSaving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Credentials'
+              )}
+            </button>
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

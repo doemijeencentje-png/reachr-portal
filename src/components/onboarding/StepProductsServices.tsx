@@ -64,8 +64,8 @@ export default function StepProductsServices({ data, updateData }: StepProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-white mb-2">Products & Services</h2>
-        <p className="text-gray-400">
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">Products & Services</h2>
+        <p className="text-slate-500">
           List your main products or services so we can create relevant content.
         </p>
       </div>
@@ -78,8 +78,8 @@ export default function StepProductsServices({ data, updateData }: StepProps) {
             onClick={() => setActiveProductIndex(index)}
             className={`px-4 py-2 rounded-lg transition-colors ${
               activeProductIndex === index
-                ? 'bg-primary text-dark'
-                : 'bg-dark-200 text-gray-400 hover:bg-dark-300'
+                ? 'bg-cyan-600 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
             {product.name || `Product ${index + 1}`}
@@ -95,12 +95,12 @@ export default function StepProductsServices({ data, updateData }: StepProps) {
       {activeProductIndex !== null && data.products_services[activeProductIndex] && (
         <Card variant="bordered" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-white">
+            <h3 className="text-lg font-medium text-slate-900">
               {data.products_services[activeProductIndex].name || 'New Product'}
             </h3>
             <button
               onClick={() => removeProduct(activeProductIndex)}
-              className="text-red-500 hover:text-red-400"
+              className="text-red-500 hover:text-red-600"
             >
               <Trash2 className="w-5 h-5" />
             </button>
@@ -114,31 +114,31 @@ export default function StepProductsServices({ data, updateData }: StepProps) {
           />
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-700 mb-1">
               Description
             </label>
             <textarea
               placeholder="Describe this product or service..."
               value={data.products_services[activeProductIndex].description}
               onChange={(e) => updateProduct(activeProductIndex, { description: e.target.value })}
-              className="w-full px-4 py-2.5 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary resize-none h-24"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none h-24"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               Key Features
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
               {data.products_services[activeProductIndex].features.map((feature, i) => (
                 <span
                   key={i}
-                  className="inline-flex items-center gap-1 px-3 py-1 bg-dark-300 text-gray-300 rounded-full text-sm"
+                  className="inline-flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm"
                 >
                   {feature}
                   <button
                     onClick={() => removeFeature(activeProductIndex, i)}
-                    className="text-gray-500 hover:text-red-500"
+                    className="text-slate-400 hover:text-red-500"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -161,9 +161,9 @@ export default function StepProductsServices({ data, updateData }: StepProps) {
       )}
 
       {data.products_services.length === 0 && (
-        <div className="text-center py-8 text-gray-400">
+        <div className="text-center py-8 text-slate-500">
           <p>No products or services added yet.</p>
-          <p className="text-sm">Click "Add Product" to get started.</p>
+          <p className="text-sm">Click &quot;Add Product&quot; to get started.</p>
         </div>
       )}
     </div>

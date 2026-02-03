@@ -23,7 +23,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/active",
+        "url": "=http://host.docker.internal:3000/api/tenants/active",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
@@ -100,7 +100,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/research",
+        "url": "=http://host.docker.internal:3000/api/ai/research",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -156,7 +156,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/generate",
+        "url": "=http://host.docker.internal:3000/api/ai/generate",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -212,7 +212,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/{{ $json.tenantId }}/config",
+        "url": "=http://host.docker.internal:3000/api/tenants/{{ $json.tenantId }}/config",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -253,7 +253,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/content/published",
+        "url": "=http://host.docker.internal:3000/api/content/published",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,

@@ -1,9 +1,68 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
 export default function BackgroundEffects() {
   const cursorGlowRef = useRef<HTMLDivElement>(null);
+
+  // Initialize card tilt effects
+  const initCardTilt = useCallback(() => {
+    const cards = document.querySelectorAll('.card-hover, .stat-card');
+
+    cards.forEach((card) => {
+      const element = card as HTMLElement;
+
+      const handleMouseMove = (e: MouseEvent) => {
+        const rect = element.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const rotateX = (y - centerY) / 20;
+        const rotateY = (centerX - x) / 20;
+
+        element.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-5px)`;
+      };
+
+      const handleMouseLeave = () => {
+        element.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) translateY(0)';
+      };
+
+      element.addEventListener('mousemove', handleMouseMove);
+      element.addEventListener('mouseleave', handleMouseLeave);
+    });
+  }, []);
+
+  // Initialize button ripple effects
+  const initButtonRipple = useCallback(() => {
+    const buttons = document.querySelectorAll('.btn-glow');
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', function(e: Event) {
+        const event = e as MouseEvent;
+        const button = btn as HTMLElement;
+        const rect = button.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        const ripple = document.createElement('span');
+        ripple.style.cssText = `
+          position: absolute;
+          width: 20px;
+          height: 20px;
+          background: rgba(255,255,255,0.5);
+          border-radius: 50%;
+          transform: translate(-50%, -50%) scale(0);
+          animation: ripple 0.6s ease-out;
+          left: ${x}px;
+          top: ${y}px;
+          pointer-events: none;
+        `;
+        button.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
+      });
+    });
+  }, []);
 
   useEffect(() => {
     const cursorGlow = cursorGlowRef.current;
@@ -37,12 +96,20 @@ export default function BackgroundEffects() {
     document.addEventListener('mouseleave', handleMouseLeave);
     animationId = requestAnimationFrame(animateGlow);
 
+    // Initialize card tilt and button ripple after a short delay
+    // to ensure DOM elements are rendered
+    const timer = setTimeout(() => {
+      initCardTilt();
+      initButtonRipple();
+    }, 100);
+
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseleave', handleMouseLeave);
       cancelAnimationFrame(animationId);
+      clearTimeout(timer);
     };
-  }, []);
+  }, [initCardTilt, initButtonRipple]);
 
   return (
     <>
@@ -55,6 +122,8 @@ export default function BackgroundEffects() {
       {/* Screen glow effects */}
       <div className="screen-glow" />
       <div className="screen-glow-bottom" />
+      <div className="ambient-glow ambient-glow-left" />
+      <div className="ambient-glow ambient-glow-right" />
 
       {/* Floating particles */}
       <div className="particle" style={{ top: '20%', left: '10%', animationDelay: '0s' }} />
@@ -67,6 +136,8 @@ export default function BackgroundEffects() {
       <div className="particle particle-sm" style={{ top: '85%', left: '60%', animationDelay: '7s' }} />
       <div className="particle particle-sm" style={{ top: '45%', left: '25%', animationDelay: '1s' }} />
       <div className="particle" style={{ top: '55%', left: '45%', animationDelay: '5s' }} />
+      <div className="particle particle-lg" style={{ top: '25%', left: '75%', animationDelay: '9s' }} />
+      <div className="particle particle-sm" style={{ top: '75%', left: '40%', animationDelay: '11s' }} />
     </>
   );
 }

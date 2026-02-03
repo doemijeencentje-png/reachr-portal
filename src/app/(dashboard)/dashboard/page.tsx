@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { Card } from '@/components/ui';
 import Link from 'next/link';
-import { FileText, Briefcase, Settings, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -12,7 +10,6 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  // Get tenant data
   const { data: tenantUser } = await supabase
     .from('tenant_users')
     .select('tenant_id')
@@ -20,26 +17,21 @@ export default async function DashboardPage() {
     .single();
 
   let profile = null;
-  let jobs: { id: string; job_type: string; status: string; blog_post_url: string | null; started_at: string }[] = [];
+  let jobs: { id: string; job_type: string; status: string; started_at: string }[] = [];
+  let contentItems: { id: string; title: string; status: string; views_at_72h: number | null; published_at: string | null }[] = [];
 
   if (tenantUser) {
-    const { data: profileData } = await supabase
-      .from('website_profiles')
-      .select('*')
-      .eq('tenant_id', tenantUser.tenant_id)
-      .single();
-    profile = profileData;
+    const [profileRes, jobsRes, contentRes] = await Promise.all([
+      supabase.from('website_profiles').select('*').eq('tenant_id', tenantUser.tenant_id).single(),
+      supabase.from('workflow_jobs').select('*').eq('tenant_id', tenantUser.tenant_id).order('started_at', { ascending: false }).limit(5),
+      supabase.from('content_items').select('*').eq('tenant_id', tenantUser.tenant_id).order('created_at', { ascending: false }).limit(5),
+    ]);
 
-    const { data: jobsData } = await supabase
-      .from('workflow_jobs')
-      .select('*')
-      .eq('tenant_id', tenantUser.tenant_id)
-      .order('started_at', { ascending: false })
-      .limit(5);
-    jobs = jobsData || [];
+    profile = profileRes.data;
+    jobs = jobsRes.data || [];
+    contentItems = contentRes.data || [];
   }
 
-  // Calculate profile completeness
   const calculateCompleteness = () => {
     if (!profile) return 0;
     const fields = [
@@ -53,156 +45,312 @@ export default async function DashboardPage() {
       profile.internal_links?.length > 0,
       profile.full_html,
     ];
-    const completed = fields.filter(Boolean).length;
-    return Math.round((completed / fields.length) * 100);
+    return Math.round((fields.filter(Boolean).length / fields.length) * 100);
   };
 
   const completeness = calculateCompleteness();
+  const publishedPosts = contentItems.filter(item => item.status !== 'draft').length;
+  const activeJobs = jobs.filter(j => j.status === 'running' || j.status === 'pending').length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white">Welcome back!</h2>
-        {!profile?.onboarding_completed && (
-          <Link
-            href="/onboarding"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-dark font-medium rounded-lg hover:bg-primary-dark transition-colors"
-          >
-            Complete Onboarding
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        )}
+    <div>
+      {/* Page Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#111827' }}>Welcome back!</h1>
+        <Link
+          href="/onboarding"
+          style={{
+            padding: '0.75rem 1.5rem',
+            backgroundColor: '#00C853',
+            color: 'white',
+            fontWeight: 600,
+            fontSize: '1rem',
+            borderRadius: '8px',
+            textDecoration: 'none',
+            boxShadow: '0 4px 15px rgba(0, 200, 83, 0.3)',
+            transition: 'all 0.2s',
+          }}
+        >
+          Complete Onboarding
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Stats Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
         {/* Profile Completeness */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Profile Completeness</h3>
-            <span className={`text-2xl font-bold ${completeness === 100 ? 'text-primary' : 'text-yellow-500'}`}>
+        <div style={{
+          backgroundColor: '#ffffff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          transition: 'all 0.3s ease',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>Profile Completeness</span>
+            <span style={{
+              fontSize: '1.5rem',
+              fontWeight: 700,
+              color: completeness >= 100 ? '#00C853' : '#F59E0B',
+              textShadow: completeness >= 100 ? '0 0 20px rgba(0, 200, 83, 0.5)' : 'none',
+            }}>
               {completeness}%
             </span>
           </div>
-          <div className="w-full bg-dark-300 rounded-full h-3 mb-4">
-            <div
-              className={`h-3 rounded-full transition-all duration-500 ${completeness === 100 ? 'bg-primary' : 'bg-yellow-500'}`}
-              style={{ width: `${completeness}%` }}
-            />
+          <div style={{
+            height: '8px',
+            backgroundColor: '#e5e7eb',
+            borderRadius: '4px',
+            overflow: 'hidden',
+            margin: '1rem 0',
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${completeness}%`,
+              backgroundColor: completeness >= 100 ? '#00C853' : '#F59E0B',
+              borderRadius: '4px',
+              transition: 'width 0.5s',
+              boxShadow: completeness >= 100 ? '0 0 10px rgba(0, 200, 83, 0.5)' : '0 0 10px rgba(245, 158, 11, 0.4)',
+            }} />
           </div>
-          {completeness < 100 && (
-            <Link href="/onboarding" className="text-sm text-primary hover:text-primary-light flex items-center gap-1">
-              Complete your profile <ArrowRight className="w-3 h-3" />
-            </Link>
-          )}
-        </Card>
+          <Link
+            href="/onboarding"
+            style={{ color: '#00C853', fontSize: '0.9rem', fontWeight: 500, textDecoration: 'none' }}
+          >
+            Complete your profile →
+          </Link>
+        </div>
 
         {/* Active Jobs */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Active Jobs</h3>
-            <Briefcase className="w-5 h-5 text-primary" />
+        <div style={{
+          backgroundColor: '#ffffff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          transition: 'all 0.3s ease',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>Active Jobs</span>
+            <svg style={{ width: '20px', height: '20px', color: '#00C853' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
           </div>
-          <p className="text-3xl font-bold text-white mb-2">
-            {jobs.filter(j => j.status === 'running' || j.status === 'pending').length}
-          </p>
-          <Link href="/jobs" className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
-            View all jobs <ArrowRight className="w-3 h-3" />
+          <div style={{ fontSize: '2rem', fontWeight: 700, color: '#111827' }}>{activeJobs}</div>
+          <Link
+            href="/jobs"
+            style={{ color: '#6b7280', fontSize: '0.9rem', textDecoration: 'none' }}
+          >
+            View all jobs →
           </Link>
-        </Card>
+        </div>
 
         {/* Posts Created */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Posts Created</h3>
-            <FileText className="w-5 h-5 text-primary" />
+        <div style={{
+          backgroundColor: '#ffffff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          transition: 'all 0.3s ease',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>Posts Created</span>
+            <svg style={{ width: '20px', height: '20px', color: '#00C853' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
           </div>
-          <p className="text-3xl font-bold text-white mb-2">
-            {jobs.filter(j => j.status === 'completed' && j.job_type === 'create_post').length}
-          </p>
-          <p className="text-sm text-gray-400">Total blog posts published</p>
-        </Card>
+          <div style={{ fontSize: '2rem', fontWeight: 700, color: '#111827' }}>{publishedPosts}</div>
+          <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>Total blog posts published</span>
+        </div>
       </div>
 
       {/* Quick Actions */}
-      <Card>
-        <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div style={{
+        backgroundColor: '#ffffff',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        padding: '1.5rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+        marginBottom: '1.5rem',
+      }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '1rem' }}>Quick Actions</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
           <Link
             href="/onboarding"
-            className="flex items-center gap-3 p-4 bg-dark-200 rounded-lg hover:bg-dark-300 transition-colors"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              padding: '1rem',
+              backgroundColor: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              textDecoration: 'none',
+              transition: 'all 0.2s',
+            }}
           >
-            <FileText className="w-6 h-6 text-primary" />
+            <div style={{
+              width: '40px',
+              height: '40px',
+              backgroundColor: 'rgba(0, 200, 83, 0.15)',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <svg style={{ width: '20px', height: '20px', color: '#00C853' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
             <div>
-              <p className="font-medium text-white">Edit Profile</p>
-              <p className="text-sm text-gray-400">Update your website info</p>
+              <div style={{ fontWeight: 500, color: '#111827' }}>Edit Profile</div>
+              <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Update your website info</div>
             </div>
           </Link>
+
           <Link
             href="/jobs"
-            className="flex items-center gap-3 p-4 bg-dark-200 rounded-lg hover:bg-dark-300 transition-colors"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              padding: '1rem',
+              backgroundColor: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              textDecoration: 'none',
+              transition: 'all 0.2s',
+            }}
           >
-            <Briefcase className="w-6 h-6 text-primary" />
+            <div style={{
+              width: '40px',
+              height: '40px',
+              backgroundColor: 'rgba(0, 200, 83, 0.15)',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <svg style={{ width: '20px', height: '20px', color: '#00C853' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+            </div>
             <div>
-              <p className="font-medium text-white">View Jobs</p>
-              <p className="text-sm text-gray-400">Monitor your workflows</p>
+              <div style={{ fontWeight: 500, color: '#111827' }}>View Jobs</div>
+              <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Monitor your workflows</div>
             </div>
           </Link>
+
           <Link
             href="/settings"
-            className="flex items-center gap-3 p-4 bg-dark-200 rounded-lg hover:bg-dark-300 transition-colors"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              padding: '1rem',
+              backgroundColor: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              textDecoration: 'none',
+              transition: 'all 0.2s',
+            }}
           >
-            <Settings className="w-6 h-6 text-primary" />
+            <div style={{
+              width: '40px',
+              height: '40px',
+              backgroundColor: 'rgba(0, 200, 83, 0.15)',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <svg style={{ width: '20px', height: '20px', color: '#00C853' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </div>
             <div>
-              <p className="font-medium text-white">Settings</p>
-              <p className="text-sm text-gray-400">Manage integrations</p>
+              <div style={{ fontWeight: 500, color: '#111827' }}>Settings</div>
+              <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Manage integrations</div>
             </div>
           </Link>
         </div>
-      </Card>
+      </div>
 
       {/* Recent Jobs */}
-      {jobs.length > 0 && (
-        <Card>
-          <h3 className="text-lg font-semibold text-white mb-4">Recent Jobs</h3>
-          <div className="space-y-3">
+      <div style={{
+        backgroundColor: '#ffffff',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        padding: '1.5rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '1rem' }}>Recent Jobs</h3>
+        {jobs.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {jobs.map((job) => (
               <div
                 key={job.id}
-                className="flex items-center justify-between p-3 bg-dark-200 rounded-lg"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '1rem',
+                  backgroundColor: '#f9fafb',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                }}
               >
-                <div className="flex items-center gap-3">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   {job.status === 'completed' ? (
-                    <CheckCircle className="w-5 h-5 text-primary" />
+                    <svg style={{ width: '20px', height: '20px', color: '#00C853' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/>
+                    </svg>
                   ) : job.status === 'failed' ? (
-                    <AlertCircle className="w-5 h-5 text-red-500" />
+                    <svg style={{ width: '20px', height: '20px', color: '#ef4444' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
                   ) : (
-                    <div className="w-5 h-5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                    <svg style={{ width: '20px', height: '20px', color: '#F59E0B' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
                   )}
                   <div>
-                    <p className="font-medium text-white capitalize">
+                    <div style={{ fontWeight: 500, color: '#111827', textTransform: 'capitalize' }}>
                       {job.job_type.replace('_', ' ')}
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      {new Date(job.started_at).toLocaleDateString()}
-                    </p>
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                      {new Date(job.started_at).toLocaleDateString('nl-NL', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </div>
                   </div>
                 </div>
-                <span
-                  className={`px-2 py-1 text-xs rounded-full ${
-                    job.status === 'completed'
-                      ? 'bg-primary/20 text-primary'
-                      : job.status === 'failed'
-                      ? 'bg-red-500/20 text-red-500'
-                      : 'bg-yellow-500/20 text-yellow-500'
-                  }`}
-                >
+                <span style={{
+                  padding: '4px 12px',
+                  borderRadius: '9999px',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  backgroundColor: job.status === 'completed' ? 'rgba(0, 200, 83, 0.15)' :
+                    job.status === 'failed' ? 'rgba(239, 68, 68, 0.15)' :
+                    job.status === 'running' ? 'rgba(245, 158, 11, 0.15)' : '#e5e7eb',
+                  color: job.status === 'completed' ? '#00A844' :
+                    job.status === 'failed' ? '#dc2626' :
+                    job.status === 'running' ? '#d97706' : '#4b5563',
+                }}>
                   {job.status}
                 </span>
               </div>
             ))}
           </div>
-        </Card>
-      )}
+        ) : (
+          <div style={{ textAlign: 'center', padding: '2rem 0', color: '#6b7280' }}>
+            <svg style={{ width: '48px', height: '48px', margin: '0 auto 0.75rem', color: '#d1d5db' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            <p>No jobs yet. Complete your profile to start generating content.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

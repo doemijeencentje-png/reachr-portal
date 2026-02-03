@@ -121,55 +121,55 @@ export default function StepReview({ data }: StepProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-white mb-2">Review & Activate</h2>
-        <p className="text-gray-400">
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Review & Activate</h2>
+        <p className="text-gray-500">
           Review your profile settings before activating automated content generation.
         </p>
       </div>
 
       {/* Completeness Score */}
-      <div className="p-4 bg-dark-200 rounded-lg">
+      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-white font-medium">Profile Completeness</span>
-          <span className={`text-2xl font-bold ${completeness === 100 ? 'text-primary' : 'text-yellow-500'}`}>
+          <span className="text-gray-900 font-medium">Profile Completeness</span>
+          <span className={`text-2xl font-bold ${completeness === 100 ? 'stat-green' : 'stat-yellow'}`}>
             {completeness}%
           </span>
         </div>
-        <div className="w-full bg-dark-300 rounded-full h-3">
+        <div className="w-full bg-gray-200 rounded-full h-3">
           <div
             className={`h-3 rounded-full transition-all duration-500 ${
-              completeness === 100 ? 'bg-primary' : 'bg-yellow-500'
+              completeness === 100 ? 'bg-[var(--primary)] progress-glow' : 'bg-amber-500'
             }`}
             style={{ width: `${completeness}%` }}
           />
         </div>
         {completeness < 100 && (
-          <p className="mt-2 text-sm text-yellow-500">
+          <p className="mt-2 text-sm text-amber-600">
             Complete all required fields for best results.
           </p>
         )}
       </div>
 
       {/* Review Sections */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {sections.map((section) => (
-          <div key={section.title} className="p-4 bg-dark-200 rounded-lg">
-            <h3 className="text-sm font-medium text-primary mb-3">{section.title}</h3>
+          <div key={section.title} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-sm font-medium text-[var(--primary-dark)] mb-3">{section.title}</h3>
             <div className="space-y-2">
               {section.items.map((item) => (
                 <div key={item.label} className="flex items-start justify-between">
-                  <span className="text-sm text-gray-400">{item.label}</span>
+                  <span className="text-sm text-gray-500">{item.label}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-white text-right max-w-xs truncate">
+                    <span className="text-sm text-gray-900 text-right max-w-[150px] truncate">
                       {item.value || (
-                        <span className="text-gray-500 italic">Not provided</span>
+                        <span className="text-gray-400 italic">Not provided</span>
                       )}
                     </span>
                     {item.required && (
                       item.value ? (
-                        <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
+                        <CheckCircle className="w-4 h-4 text-[var(--primary)] flex-shrink-0" />
                       ) : (
-                        <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                        <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
                       )
                     )}
                   </div>
@@ -180,9 +180,9 @@ export default function StepReview({ data }: StepProps) {
         ))}
       </div>
 
-      <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-primary mb-2">What happens next?</h3>
-        <ul className="text-sm text-gray-400 space-y-1">
+      <div className="bg-[rgba(0,200,83,0.1)] border border-[rgba(0,200,83,0.3)] rounded-lg p-4">
+        <h3 className="text-sm font-medium text-[var(--primary-dark)] mb-2">What happens next?</h3>
+        <ul className="text-sm text-gray-600 space-y-1">
           <li>• Your profile will be activated for automated content generation</li>
           <li>• Our AI will analyze your website and competitors</li>
           <li>• Blog posts will be generated and published to your WordPress site</li>

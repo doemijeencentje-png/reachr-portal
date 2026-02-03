@@ -75,15 +75,15 @@ export default function StepKeywords({ data, updateData }: StepProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-white mb-2">Keywords & Competition</h2>
-        <p className="text-gray-400">
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Keywords & Competition</h2>
+        <p className="text-gray-500">
           Define your target keywords and competitors for better content targeting.
         </p>
       </div>
 
       {/* Seed Keywords */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           Seed Keywords
         </label>
         <p className="text-sm text-gray-500 mb-3">
@@ -94,10 +94,10 @@ export default function StepKeywords({ data, updateData }: StepProps) {
           {data.seed_keywords.map((keyword, index) => (
             <span
               key={index}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-full text-sm"
+              className="tag-glow inline-flex items-center gap-1 px-3 py-1 bg-[rgba(0,200,83,0.15)] text-[var(--primary-dark)] rounded-full text-sm"
             >
               {keyword}
-              <button onClick={() => removeKeyword(index)} className="hover:text-primary-light">
+              <button onClick={() => removeKeyword(index)} className="hover:text-[var(--primary)]">
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -110,6 +110,7 @@ export default function StepKeywords({ data, updateData }: StepProps) {
             value={newKeyword}
             onChange={(e) => setNewKeyword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addKeyword())}
+            className="bg-gray-50 border-gray-300"
           />
           <Button variant="secondary" onClick={addKeyword}>
             Add
@@ -119,7 +120,7 @@ export default function StepKeywords({ data, updateData }: StepProps) {
 
       {/* Competitors */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           Competitors
         </label>
         <p className="text-sm text-gray-500 mb-3">
@@ -131,15 +132,15 @@ export default function StepKeywords({ data, updateData }: StepProps) {
             {data.competitors.map((competitor, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between p-3 bg-dark-200 rounded-lg"
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
               >
                 <div>
-                  <p className="text-white font-medium">{competitor.name}</p>
-                  <p className="text-sm text-gray-400">{competitor.url}</p>
+                  <p className="text-gray-900 font-medium">{competitor.name}</p>
+                  <p className="text-sm text-gray-500">{competitor.url}</p>
                 </div>
                 <button
                   onClick={() => removeCompetitor(index)}
-                  className="text-red-500 hover:text-red-400"
+                  className="text-red-500 hover:text-red-600"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -153,11 +154,13 @@ export default function StepKeywords({ data, updateData }: StepProps) {
             placeholder="Competitor name"
             value={newCompetitor.name}
             onChange={(e) => setNewCompetitor({ ...newCompetitor, name: e.target.value })}
+            className="bg-gray-50 border-gray-300"
           />
           <Input
             placeholder="https://competitor.com"
             value={newCompetitor.url}
             onChange={(e) => setNewCompetitor({ ...newCompetitor, url: e.target.value })}
+            className="bg-gray-50 border-gray-300"
           />
         </div>
         <Button variant="outline" size="sm" onClick={addCompetitor} className="mt-2">
@@ -168,7 +171,7 @@ export default function StepKeywords({ data, updateData }: StepProps) {
 
       {/* Geo Targets */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           Geographic Targets
         </label>
         <div className="flex flex-wrap gap-2">
@@ -176,10 +179,10 @@ export default function StepKeywords({ data, updateData }: StepProps) {
             <button
               key={geo}
               onClick={() => toggleGeoTarget(geo)}
-              className={`px-3 py-1 rounded-full text-sm transition-colors ${
+              className={`tag-glow px-3 py-1 rounded-full text-sm transition-colors ${
                 data.geo_targets.includes(geo)
-                  ? 'bg-primary text-dark'
-                  : 'bg-dark-200 text-gray-400 hover:bg-dark-300'
+                  ? 'bg-[var(--primary)] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
               }`}
             >
               {geo}
@@ -190,7 +193,7 @@ export default function StepKeywords({ data, updateData }: StepProps) {
 
       {/* Languages */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           Languages
         </label>
         <div className="flex flex-wrap gap-2">
@@ -198,10 +201,10 @@ export default function StepKeywords({ data, updateData }: StepProps) {
             <button
               key={lang.code}
               onClick={() => toggleLanguage(lang.code)}
-              className={`px-3 py-1 rounded-full text-sm transition-colors ${
+              className={`tag-glow px-3 py-1 rounded-full text-sm transition-colors ${
                 data.languages.includes(lang.code)
-                  ? 'bg-primary text-dark'
-                  : 'bg-dark-200 text-gray-400 hover:bg-dark-300'
+                  ? 'bg-[var(--primary)] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
               }`}
             >
               {lang.name}

@@ -22,7 +22,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/evaluate",
+        "url": "=http://host.docker.internal:3000/api/ai/evaluate",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
@@ -87,7 +87,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/{{ $json.tenant_id }}/config",
+        "url": "=http://host.docker.internal:3000/api/tenants/{{ $json.tenant_id }}/config",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -225,7 +225,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/evaluate",
+        "url": "=http://host.docker.internal:3000/api/ai/evaluate",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -308,7 +308,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/ai/optimize",
+        "url": "=http://host.docker.internal:3000/api/ai/optimize",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -334,7 +334,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/{{ $json.tenantId }}/config",
+        "url": "=http://host.docker.internal:3000/api/tenants/{{ $json.tenantId }}/config",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -398,7 +398,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/tenants/{{ $json.evaluation.tenantId || $('3. Parse Stats').item.json.tenantId }}/config",
+        "url": "=http://host.docker.internal:3000/api/tenants/{{ $json.evaluation.tenantId || $('3. Parse Stats').item.json.tenantId }}/config",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -437,7 +437,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.REACHR_PORTAL_URL }}/api/content/offline",
+        "url": "=http://host.docker.internal:3000/api/content/offline",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,

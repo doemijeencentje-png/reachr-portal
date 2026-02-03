@@ -26,9 +26,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${spaceGrotesk.variable} font-sans antialiased bg-white text-gray-900`}
+        className={`${inter.variable} ${spaceGrotesk.variable} antialiased`}
+        style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
       >
-        <BackgroundEffects />
         {children}
       </body>
     </html>
