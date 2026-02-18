@@ -1,63 +1,16 @@
-/**
- * In-memory rate limiter using sliding window algorithm
- * For production with multiple instances, use Upstash Redis instead
- */
-
-interface RateLimitEntry {
-  timestamps: number[];
-}
-
-interface RateLimitConfig {
-  windowMs: number; // Time window in milliseconds
-  maxRequests: number; // Max requests per window
-}
-
-// In-memory store (resets on server restart)
-const store = new Map<string, RateLimitEntry>();
-
-// Cleanup old entries every 5 minutes to prevent memory leak
-const CLEANUP_INTERVAL = 5 * 60 * 1000;
-let lastCleanup = Date.now();
-
-function cleanup(windowMs: number) {
-  const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL) return;
-
-  lastCleanup = now;
-  const cutoff = now - windowMs;
-
-  for (const [key, entry] of store.entries()) {
-    entry.timestamps = entry.timestamps.filter((t) => t > cutoff);
-    if (entry.timestamps.length === 0) {
-      store.delete(key);
-    }
-  }
-}
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 
 /**
- * Rate limit configurations for different endpoint types
+ * Rate limit configurations for different endpoint types.
+ * Uses Upstash Redis in production, falls back to in-memory for local dev.
  */
+
 export const rateLimitConfigs = {
-  // Standard API endpoints
-  standard: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 100,
-  },
-  // AI endpoints (expensive Claude API calls)
-  ai: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 10,
-  },
-  // Authentication endpoints (prevent brute force)
-  auth: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 5,
-  },
-  // Webhook endpoints (n8n)
-  webhook: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 50,
-  },
+  standard: { requests: 100, window: '60 s' as const },
+  ai:       { requests: 10,  window: '60 s' as const },
+  auth:     { requests: 5,   window: '60 s' as const },
+  webhook:  { requests: 50,  window: '60 s' as const },
 } as const;
 
 export type RateLimitType = keyof typeof rateLimitConfigs;
@@ -65,20 +18,45 @@ export type RateLimitType = keyof typeof rateLimitConfigs;
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
-  resetAt: number; // Unix timestamp when the window resets
-  retryAfter?: number; // Seconds until rate limit resets (only if blocked)
+  resetAt: number;
+  retryAfter?: number;
+}
+
+// Singleton limiters per type
+const limiters = new Map<RateLimitType, Ratelimit>();
+
+function getOrCreateLimiter(type: RateLimitType): Ratelimit {
+  const existing = limiters.get(type);
+  if (existing) return existing;
+
+  const config = rateLimitConfigs[type];
+
+  const hasRedis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  const limiter = new Ratelimit({
+    redis: hasRedis
+      ? new Redis({
+          url: process.env.UPSTASH_REDIS_REST_URL!,
+          token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+        })
+      : Redis.fromEnv(),
+    limiter: Ratelimit.slidingWindow(config.requests, config.window),
+    prefix: `reachr:ratelimit:${type}`,
+    ephemeralCache: hasRedis ? undefined : new Map(),
+  });
+
+  limiters.set(type, limiter);
+  return limiter;
 }
 
 /**
- * Check if a request should be rate limited
- * @param identifier - Unique identifier (usually IP address)
- * @param type - Type of rate limit to apply
+ * Check if a request should be rate limited.
+ * Uses Upstash Redis in production, ephemeral cache in dev.
  */
-export function checkRateLimit(
+export async function checkRateLimit(
   identifier: string,
   type: RateLimitType = 'standard'
-): RateLimitResult {
-  // Check if rate limiting is enabled
+): Promise<RateLimitResult> {
   if (process.env.RATE_LIMIT_ENABLED !== 'true') {
     return {
       allowed: true,
@@ -87,66 +65,40 @@ export function checkRateLimit(
     };
   }
 
-  const config = rateLimitConfigs[type];
-  const now = Date.now();
-  const windowStart = now - config.windowMs;
-  const key = `${type}:${identifier}`;
-
-  // Cleanup old entries periodically
-  cleanup(config.windowMs);
-
-  // Get or create entry
-  let entry = store.get(key);
-  if (!entry) {
-    entry = { timestamps: [] };
-    store.set(key, entry);
-  }
-
-  // Remove timestamps outside the window
-  entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
-
-  // Check if limit exceeded
-  if (entry.timestamps.length >= config.maxRequests) {
-    const oldestTimestamp = entry.timestamps[0];
-    const resetAt = oldestTimestamp + config.windowMs;
-    const retryAfter = Math.ceil((resetAt - now) / 1000);
+  try {
+    const limiter = getOrCreateLimiter(type);
+    const key = `${type}:${identifier}`;
+    const result = await limiter.limit(key);
 
     return {
-      allowed: false,
-      remaining: 0,
-      resetAt,
-      retryAfter,
+      allowed: result.success,
+      remaining: result.remaining,
+      resetAt: result.reset,
+      retryAfter: result.success ? undefined : Math.ceil((result.reset - Date.now()) / 1000),
+    };
+  } catch (err) {
+    // If Redis is down, fail open (allow the request) but log
+    console.error('Rate limiter error (failing open):', err);
+    return {
+      allowed: true,
+      remaining: -1,
+      resetAt: Date.now() + 60000,
     };
   }
-
-  // Add current request timestamp
-  entry.timestamps.push(now);
-
-  return {
-    allowed: true,
-    remaining: config.maxRequests - entry.timestamps.length,
-    resetAt: now + config.windowMs,
-  };
 }
 
 /**
- * Get rate limit type based on pathname
+ * Get rate limit type based on pathname.
  */
 export function getRateLimitType(pathname: string): RateLimitType {
-  if (pathname.startsWith('/api/ai/')) {
-    return 'ai';
-  }
-  if (pathname.startsWith('/api/auth/')) {
-    return 'auth';
-  }
-  if (pathname.includes('/webhook/')) {
-    return 'webhook';
-  }
+  if (pathname.startsWith('/api/ai/')) return 'ai';
+  if (pathname.startsWith('/api/auth/')) return 'auth';
+  if (pathname.includes('/webhook/')) return 'webhook';
   return 'standard';
 }
 
 /**
- * Create rate limit headers for response
+ * Create rate limit headers for response.
  */
 export function createRateLimitHeaders(result: RateLimitResult): Record<string, string> {
   const headers: Record<string, string> = {

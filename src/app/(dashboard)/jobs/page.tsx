@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
+import TriggerWorkflowButton from '@/components/jobs/TriggerWorkflowButton';
 
 export default async function JobsPage() {
   const supabase = await createClient();
@@ -55,20 +56,7 @@ export default async function JobsPage() {
           <p className="text-gray-500 mt-1">Monitor your automated content workflows</p>
         </div>
         {tenantUser && (
-          <form action="/api/webhook/trigger" method="POST">
-            <input type="hidden" name="tenant_id" value={tenantUser.tenant_id} />
-            <input type="hidden" name="event" value="manual_trigger" />
-            <button
-              type="submit"
-              className="btn-glow inline-flex items-center gap-2 px-6 py-3 bg-[var(--primary)] text-white font-semibold rounded-lg hover:bg-[var(--primary-dark)] transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              Trigger Workflow
-            </button>
-          </form>
+          <TriggerWorkflowButton tenantId={tenantUser.tenant_id} />
         )}
       </div>
 

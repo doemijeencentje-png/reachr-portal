@@ -29,9 +29,9 @@ export async function checkApiSecurity(
   const clientIp = getClientIp(req.headers);
   const pathname = req.nextUrl.pathname;
 
-  // 1. Rate limiting
+  // 1. Rate limiting (async — Upstash Redis)
   const rateLimitType = options.rateLimitType || getRateLimitType(pathname);
-  const rateLimitResult = checkRateLimit(clientIp || 'unknown', rateLimitType);
+  const rateLimitResult = await checkRateLimit(clientIp || 'unknown', rateLimitType);
 
   if (!rateLimitResult.allowed) {
     const response = NextResponse.json(
@@ -96,13 +96,13 @@ export async function checkApiSecurity(
 /**
  * Helper to add rate limit headers to a successful response
  */
-export function addRateLimitHeaders(
+export async function addRateLimitHeaders(
   response: NextResponse,
   clientIp: string | null,
   pathname: string
-): NextResponse {
+): Promise<NextResponse> {
   const rateLimitType = getRateLimitType(pathname);
-  const rateLimitResult = checkRateLimit(clientIp || 'unknown', rateLimitType);
+  const rateLimitResult = await checkRateLimit(clientIp || 'unknown', rateLimitType);
   const headers = createRateLimitHeaders(rateLimitResult);
 
   Object.entries(headers).forEach(([key, value]) => {
@@ -137,7 +137,7 @@ export function withApiSecurity(
     const response = await handler(req, { clientIp: securityResult.clientIp });
 
     // Add rate limit headers to successful response
-    return addRateLimitHeaders(
+    return await addRateLimitHeaders(
       response,
       securityResult.clientIp,
       req.nextUrl.pathname

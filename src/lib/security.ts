@@ -131,6 +131,30 @@ export interface VerifyRequestResult {
   statusCode?: number;
 }
 
+const MAX_TIMESTAMP_DRIFT_MS = 60_000;
+
+/**
+ * Verify x-timestamp header is within acceptable drift window (anti-replay)
+ */
+export function verifyTimestamp(headers: Headers): VerifyRequestResult {
+  const timestamp = headers.get('x-timestamp');
+  if (!timestamp) {
+    return { valid: false, error: 'Missing x-timestamp header', statusCode: 400 };
+  }
+
+  const requestTime = new Date(timestamp).getTime();
+  if (isNaN(requestTime)) {
+    return { valid: false, error: 'Invalid x-timestamp format', statusCode: 400 };
+  }
+
+  const drift = Math.abs(Date.now() - requestTime);
+  if (drift > MAX_TIMESTAMP_DRIFT_MS) {
+    return { valid: false, error: 'Request timestamp expired (anti-replay)', statusCode: 403 };
+  }
+
+  return { valid: true };
+}
+
 export function verifyRequest(options: VerifyRequestOptions): VerifyRequestResult {
   const { headers, body, requireHmac = false } = options;
 
@@ -157,6 +181,12 @@ export function verifyRequest(options: VerifyRequestOptions): VerifyRequestResul
   // 3. Verify HMAC signature (if required and configured)
   const hmacSecret = process.env.HMAC_SECRET;
   if (requireHmac && hmacSecret) {
+    // 3a. Anti-replay: check timestamp
+    const timestampResult = verifyTimestamp(headers);
+    if (!timestampResult.valid) {
+      return timestampResult;
+    }
+
     const signature = headers.get('x-signature');
 
     if (!body) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { callClaude, parseJsonFromResponse } from '@/lib/anthropic';
 import { checkApiSecurity } from '@/lib/api-security';
+import { transitionContent } from '@/lib/content-state-machine';
 
 // Response type from Claude
 interface OptimizeResult {
@@ -69,19 +70,21 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // 1. Get the content item
-    const { data: contentItem, error: contentError } = await supabase
-      .from('content_items')
-      .select('*')
-      .eq('id', contentItemId)
-      .single();
+    // 1. Get the content item and transition to 'optimizing'
+    const { data: transitioned, error: transitionError } = await transitionContent(
+      supabase,
+      contentItemId,
+      'optimizing'
+    );
 
-    if (contentError || !contentItem) {
+    if (transitionError) {
       return NextResponse.json(
-        { error: 'Content item not found' },
-        { status: 404 }
+        { error: transitionError },
+        { status: 409 }
       );
     }
+
+    const contentItem = transitioned as Record<string, unknown>;
 
     // 2. Get tenant's website profile
     const { data: profile, error: profileError } = await supabase
@@ -172,27 +175,26 @@ Geef het geoptimaliseerde artikel in JSON format.`;
       );
     }
 
-    // 8. Update content_item in database
-    const { data: updatedItem, error: updateError } = await supabase
-      .from('content_items')
-      .update({
+    // 8. Guarded transition: optimizing → optimized
+    const { data: updatedItem, error: finalTransitionError } = await transitionContent(
+      supabase,
+      contentItemId,
+      'optimized',
+      {
         title: result.title,
         slug: result.slug,
         meta_description: result.metaDescription,
         content: result.content,
-        version: contentItem.version + 1,
+        version: (contentItem.version as number) + 1,
         previous_version_id: contentItem.id,
-        status: 'optimized',
         optimized_at: new Date().toISOString(),
-      })
-      .eq('id', contentItemId)
-      .select()
-      .single();
+      }
+    );
 
-    if (updateError) {
-      console.error('Failed to update content item:', updateError);
+    if (finalTransitionError) {
+      console.error('Failed to transition to optimized:', finalTransitionError);
       return NextResponse.json(
-        { error: 'Failed to save optimized content', details: updateError.message },
+        { error: 'Failed to save optimized content', details: finalTransitionError },
         { status: 500 }
       );
     }
@@ -201,12 +203,12 @@ Geef het geoptimaliseerde artikel in JSON format.`;
     return NextResponse.json({
       success: true,
       contentItem: {
-        id: updatedItem.id,
+        id: (updatedItem as Record<string, unknown>).id,
         title: result.title,
         slug: result.slug,
         metaDescription: result.metaDescription,
         content: result.content,
-        version: updatedItem.version,
+        version: (updatedItem as Record<string, unknown>).version,
       },
       changes: {
         explanation: result.changesExplanation,

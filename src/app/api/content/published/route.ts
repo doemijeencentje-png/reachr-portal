@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { checkApiSecurity } from '@/lib/api-security';
+import { transitionContent } from '@/lib/content-state-machine';
 
 /**
  * POST /api/content/published
  *
  * Called by n8n after successfully publishing a post to WordPress.
- * Updates the content_item status to 'monitoring' and sets the monitoring window.
+ * Transitions content_item from publishing → monitoring and sets the monitoring window.
  */
 export async function POST(req: NextRequest) {
   try {
-    // Security check: rate limiting, IP whitelist, API key
     const security = await checkApiSecurity(req, { rateLimitType: 'webhook' });
     if (!security.authorized) {
       return security.response!;
@@ -53,46 +53,44 @@ export async function POST(req: NextRequest) {
       publishedAt.getTime() + monitoringHours * 60 * 60 * 1000
     );
 
-    // Update content item
-    const { data: updated, error: updateError } = await supabase
-      .from('content_items')
-      .update({
-        status: 'monitoring',
+    // Guarded state transition: publishing/published → monitoring
+    const { data: updated, error: transitionError } = await transitionContent(
+      supabase,
+      contentItemId,
+      'monitoring',
+      {
         wp_post_id: wpPostId,
         wp_post_url: wpPostUrl,
         published_at: publishedAt.toISOString(),
         monitoring_ends_at: monitoringEndsAt.toISOString(),
-      })
-      .eq('id', contentItemId)
-      .select()
-      .single();
+      }
+    );
 
-    if (updateError) {
+    if (transitionError) {
       return NextResponse.json(
-        { error: 'Failed to update content item', details: updateError.message },
-        { status: 500 }
+        { error: transitionError },
+        { status: 409 }
       );
     }
 
-    // Log the workflow run
     await supabase.from('workflow_runs').insert({
       tenant_id: contentItem.tenant_id,
       run_type: 'daily_creation',
       status: 'completed',
       content_item_id: contentItemId,
-      result_summary: `Published: ${updated.title}`,
+      result_summary: `Published: ${(updated as Record<string, unknown>).title}`,
       triggered_by: 'n8n',
     });
 
     return NextResponse.json({
       success: true,
       contentItem: {
-        id: updated.id,
-        status: updated.status,
-        publishedAt: updated.published_at,
-        monitoringEndsAt: updated.monitoring_ends_at,
-        wpPostId: updated.wp_post_id,
-        wpPostUrl: updated.wp_post_url,
+        id: (updated as Record<string, unknown>).id,
+        status: (updated as Record<string, unknown>).status,
+        publishedAt: (updated as Record<string, unknown>).published_at,
+        monitoringEndsAt: (updated as Record<string, unknown>).monitoring_ends_at,
+        wpPostId: (updated as Record<string, unknown>).wp_post_id,
+        wpPostUrl: (updated as Record<string, unknown>).wp_post_url,
       },
     });
   } catch (error) {

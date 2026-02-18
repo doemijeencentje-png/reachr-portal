@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { callClaude, parseJsonFromResponse } from '@/lib/anthropic';
 import { checkApiSecurity } from '@/lib/api-security';
+import { validateSources, MIN_VALID_SOURCES } from '@/lib/source-validator';
 
 // Response type from Claude
 interface ResearchResult {
@@ -147,7 +148,33 @@ Antwoord in JSON format.`;
       );
     }
 
-    // 7. Check if topic was already used (double-check)
+    // 7. Validate sources — reject hallucinated URLs
+    const { valid: validSources, invalid: invalidSources } = await validateSources(
+      result.sources || []
+    );
+
+    if (invalidSources.length > 0) {
+      console.warn(`Source validation: ${invalidSources.length} invalid sources for tenant ${tenantId}`,
+        invalidSources.map((s) => `${s.source.url}: ${s.reason}`)
+      );
+    }
+
+    if (validSources.length < MIN_VALID_SOURCES) {
+      return NextResponse.json(
+        {
+          error: 'Insufficient valid sources — all suggested sources failed validation. Retry.',
+          invalidSources: invalidSources.map((s) => ({
+            url: s.source.url,
+            reason: s.reason,
+          })),
+        },
+        { status: 422 }
+      );
+    }
+
+    result.sources = validSources;
+
+    // 8. Check if topic was already used (double-check)
     const { data: existingTopic } = await supabase
       .from('topic_logs')
       .select('id')
@@ -162,7 +189,7 @@ Antwoord in JSON format.`;
       );
     }
 
-    // 8. Return the research result
+    // 9. Return the research result (only with validated sources)
     return NextResponse.json({
       success: true,
       research: result,

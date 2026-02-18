@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { checkApiSecurity } from '@/lib/api-security';
+import { transitionContent } from '@/lib/content-state-machine';
 
-// Decision result type
 interface EvaluationResult {
   contentItemId: string;
   decision: 'optimize' | 'takedown';
@@ -15,15 +15,12 @@ interface EvaluationResult {
 /**
  * POST /api/ai/evaluate
  *
- * Evaluates a content item after 72 hours of monitoring.
- * Makes the decision: optimize (>= threshold views) or takedown (< threshold views)
- *
- * This endpoint does NOT call Claude - it's pure decision logic.
- * The optimization itself is done by /api/ai/optimize
+ * Evaluates a content item after monitoring window expires.
+ * Decision: optimize (>= threshold views) or takedown (< threshold views).
+ * Pure decision logic — no Claude call.
  */
 export async function POST(req: NextRequest) {
   try {
-    // Security check: rate limiting, IP whitelist, API key, HMAC
     const security = await checkApiSecurity(req, { rateLimitType: 'standard' });
     if (!security.authorized) {
       return security.response!;
@@ -47,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // 1. Get the content item
+    // 1. Get the content item with tenant threshold
     const { data: contentItem, error: contentError } = await supabase
       .from('content_items')
       .select('*, tenants!inner(performance_threshold, name)')
@@ -61,32 +58,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Get threshold from tenant settings
     const threshold = contentItem.tenants?.performance_threshold || 6;
 
-    // 3. Update content item with performance data
-    await supabase
-      .from('content_items')
-      .update({
+    // 2. Guarded transition: monitoring → evaluating
+    const { error: transitionError } = await transitionContent(
+      supabase,
+      contentItemId,
+      'evaluating',
+      {
         views_at_72h: views,
         referrers: referrers || [],
-        status: 'evaluating',
         evaluated_at: new Date().toISOString(),
-      })
-      .eq('id', contentItemId);
+      }
+    );
 
-    // 4. Make the decision
-    const decision = views >= threshold ? 'optimize' : 'takedown';
-
-    // 5. Build the reason
-    let reason: string;
-    if (decision === 'optimize') {
-      reason = `Post heeft ${views} views (drempel: ${threshold}). Kwalificeeert voor optimalisatie.`;
-    } else {
-      reason = `Post heeft slechts ${views} views (drempel: ${threshold}). Wordt offline gehaald voor nieuwe poging.`;
+    if (transitionError) {
+      return NextResponse.json(
+        { error: transitionError },
+        { status: 409 }
+      );
     }
 
-    // 6. Log the workflow run
+    // 3. Make the decision
+    const decision = views >= threshold ? 'optimize' : 'takedown';
+
+    const reason = decision === 'optimize'
+      ? `Post heeft ${views} views (drempel: ${threshold}). Kwalificeert voor optimalisatie.`
+      : `Post heeft slechts ${views} views (drempel: ${threshold}). Wordt offline gehaald.`;
+
+    // 4. Log the workflow run
     await supabase.from('workflow_runs').insert({
       tenant_id: contentItem.tenant_id,
       run_type: 'monitoring_check',
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       triggered_by: 'n8n',
     });
 
-    // 7. Update topic log with success/failure
+    // 5. Update topic log with success/failure
     await supabase
       .from('topic_logs')
       .update({
@@ -130,11 +130,10 @@ export async function POST(req: NextRequest) {
 /**
  * GET /api/ai/evaluate
  *
- * Gets all content items that need evaluation (monitoring period ended)
+ * Gets all content items that need evaluation (monitoring period ended).
  */
 export async function GET(req: NextRequest) {
   try {
-    // Security check: rate limiting, IP whitelist, API key
     const security = await checkApiSecurity(req, { rateLimitType: 'standard' });
     if (!security.authorized) {
       return security.response!;
@@ -142,7 +141,6 @@ export async function GET(req: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // Get all content items where monitoring period has ended
     const { data: items, error } = await supabase
       .from('content_items')
       .select(`

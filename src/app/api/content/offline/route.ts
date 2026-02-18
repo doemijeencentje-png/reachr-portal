@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { checkApiSecurity } from '@/lib/api-security';
+import { transitionContent } from '@/lib/content-state-machine';
 
 /**
  * POST /api/content/offline
  *
  * Called by n8n after taking a post offline due to poor performance.
- * Updates the content_item status to 'offline' and logs the failure.
+ * Guarded transition: evaluating/taking_offline → offline.
  */
 export async function POST(req: NextRequest) {
   try {
-    // Security check: rate limiting, IP whitelist, API key
     const security = await checkApiSecurity(req, { rateLimitType: 'webhook' });
     if (!security.authorized) {
       return security.response!;
@@ -27,37 +27,38 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // Get content item
-    const { data: contentItem } = await supabase
-      .from('content_items')
-      .select('tenant_id, topic')
-      .eq('id', contentItemId)
-      .single();
+    // First transition to taking_offline (from evaluating)
+    const { error: takedownError } = await transitionContent(
+      supabase,
+      contentItemId,
+      'taking_offline'
+    );
 
-    if (!contentItem) {
+    if (takedownError) {
       return NextResponse.json(
-        { error: 'Content item not found' },
-        { status: 404 }
+        { error: takedownError },
+        { status: 409 }
       );
     }
 
-    // Update content item to offline
-    const { data: updated, error: updateError } = await supabase
-      .from('content_items')
-      .update({
-        status: 'offline',
+    // Then transition to offline
+    const { data: updated, error: offlineError } = await transitionContent(
+      supabase,
+      contentItemId,
+      'offline',
+      {
         last_error: reason || `Performance below threshold: ${views} < ${threshold}`,
-      })
-      .eq('id', contentItemId)
-      .select()
-      .single();
+      }
+    );
 
-    if (updateError) {
+    if (offlineError) {
       return NextResponse.json(
-        { error: 'Failed to update content item', details: updateError.message },
-        { status: 500 }
+        { error: offlineError },
+        { status: 409 }
       );
     }
+
+    const contentItem = updated as Record<string, unknown>;
 
     // Update topic log to mark as failed
     await supabase
@@ -81,8 +82,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       contentItem: {
-        id: updated.id,
-        status: updated.status,
+        id: contentItem.id,
+        status: contentItem.status,
         topic: contentItem.topic,
       },
       performance: {
